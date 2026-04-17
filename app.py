@@ -9,6 +9,56 @@ face_cascade = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 )
 
+
+@app.post("/verify-face")
+async def verify_face(
+    reference: UploadFile = File(...),
+    current: UploadFile = File(...)
+):
+    ref_bytes = await reference.read()
+    cur_bytes = await current.read()
+
+    ref_np = np.frombuffer(ref_bytes, np.uint8)
+    cur_np = np.frombuffer(cur_bytes, np.uint8)
+
+    ref_img = cv2.imdecode(ref_np, cv2.IMREAD_COLOR)
+    cur_img = cv2.imdecode(cur_np, cv2.IMREAD_COLOR)
+
+    if ref_img is None or cur_img is None:
+        return {"error": "Invalid image"}
+
+    gray_ref = cv2.cvtColor(ref_img, cv2.COLOR_BGR2GRAY)
+    gray_cur = cv2.cvtColor(cur_img, cv2.COLOR_BGR2GRAY)
+
+    faces_ref = face_cascade.detectMultiScale(gray_ref, 1.1, 3)
+    faces_cur = face_cascade.detectMultiScale(gray_cur, 1.1, 3)
+
+    if len(faces_ref) == 0 or len(faces_cur) == 0:
+        return {"match": False, "message": "Face not detected"}
+
+    x,y,w,h = faces_ref[0]
+    ref_face = ref_img[y:y+h, x:x+w]
+
+    x,y,w,h = faces_cur[0]
+    cur_face = cur_img[y:y+h, x:x+w]
+
+    emb1 = get_face_embedding(ref_face)
+    emb2 = get_face_embedding(cur_face)
+
+    distance = np.linalg.norm(emb1 - emb2)
+
+    return {
+        "match": distance < 0.6,
+        "distance": float(distance)
+    }
+
+
+def get_face_embedding(face):
+    face = cv2.resize(face, (100, 100))
+    face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+    return face.flatten() / 255.0
+
+
 @app.get("/")
 def home():
     return {"message": "ML Service Running"}
