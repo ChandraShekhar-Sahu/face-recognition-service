@@ -25,9 +25,19 @@ UPLOAD_DIR = "api/uploads/"
 REFERENCE_IMAGE_PATH = os.path.join(UPLOAD_DIR, "reference_face.jpg")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# SFace (For Facial Recognition)
-detector = cv2.FaceDetectorYN.create("face_detection_yunet_2023mar.onnx", "", (300, 300))
-recognizer = cv2.FaceRecognizerSF.create("face_recognition_sface_2021dec.onnx", "")
+# 🔥 1. Get the directory where this Python script lives
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 🔥 2. Point explicitly to the 'models' folder inside that directory
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+
+# 🔥 3. Create the full paths to the ONNX files inside the models folder
+DETECTOR_PATH = os.path.join(MODELS_DIR, "face_detection_yunet_2023mar.onnx")
+RECOGNIZER_PATH = os.path.join(MODELS_DIR, "face_recognition_sface_2021dec.onnx")
+
+# Initialize SFace using the new correct paths
+detector = cv2.FaceDetectorYN.create(DETECTOR_PATH, "", (300, 300))
+recognizer = cv2.FaceRecognizerSF.create(RECOGNIZER_PATH, "")
 
 # MediaPipe (For Liveness & Head Tracking)
 mp_face_mesh = mp.solutions.face_mesh
