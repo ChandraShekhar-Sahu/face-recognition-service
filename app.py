@@ -26,49 +26,52 @@ async def verify_face(
         ref_arr = np.frombuffer(ref_bytes, np.uint8)
         cur_arr = np.frombuffer(cur_bytes, np.uint8)
 
-        # SFace requires color images (BGR), so we don't convert to grayscale!
         ref_img = cv2.imdecode(ref_arr, cv2.IMREAD_COLOR)
         cur_img = cv2.imdecode(cur_arr, cv2.IMREAD_COLOR)
 
         if ref_img is None or cur_img is None:
             return {"error": "Image decode failed"}
 
-        # 1. Update detector to match the exact size of the incoming images
-        detector.setInputSize((ref_img.shape[1], ref_img.shape[0]))
-        _, ref_faces = detector.detect(ref_img)
+        # -------- FACE DETECTION --------
+        gray_ref = cv2.cvtColor(ref_img, cv2.COLOR_BGR2GRAY)
+        gray_cur = cv2.cvtColor(cur_img, cv2.COLOR_BGR2GRAY)
 
-        detector.setInputSize((cur_img.shape[1], cur_img.shape[0]))
-        _, cur_faces = detector.detect(cur_img)
+        ref_faces = face_cascade.detectMultiScale(gray_ref, 1.1, 3)
+        cur_faces = face_cascade.detectMultiScale(gray_cur, 1.1, 3)
 
-        # Ensure faces were found
-        if ref_faces is None or cur_faces is None:
-            return {"error": "Could not detect a face in one or both images."}
+        if len(ref_faces) == 0 or len(cur_faces) == 0:
+            return {
+                "match": False,
+                "face_detected": False,
+                "message": "No face detected"
+            }
 
-        # 2. Align the faces (straightens tilted heads)
-        ref_aligned = recognizer.alignCrop(ref_img, ref_faces[0])
-        cur_aligned = recognizer.alignCrop(cur_img, cur_faces[0])
+        # -------- SIMPLE MATCH (TEMP) --------
+        ref_img = cv2.resize(ref_img, (300, 300))
+        cur_img = cv2.resize(cur_img, (300, 300))
 
-        # 3. Extract the 128D mathematical features of the face
-        ref_feature = recognizer.feature(ref_aligned)
-        cur_feature = recognizer.feature(cur_aligned)
+        diff = np.mean(cv2.absdiff(ref_img, cur_img))
+        match = diff < 50
 
-        # 4. Compare the two faces using Cosine Distance
-        score = recognizer.match(ref_feature, cur_feature, cv2.FaceRecognizerSF_FR_COSINE)
+        # -------- HEAD MOVEMENT (SIMPLIFIED) --------
+        head_movement = "normal"
 
-        # For Cosine distance in SFace, a score > 0.363 is generally considered the same person.
-        # Higher score = better match (up to 1.0)
-        is_match = score >= 0.363
+        # -------- LIVENESS (SIMPLIFIED) --------
+        liveness = True
+        liveness_text = "Basic detection - assumed live"
 
         return {
-            "match": bool(is_match),
-            "similarity_score": float(score)
+            "match": bool(match),
+            "face_detected": True,
+            "message": "Face Matched!" if match else "Face Not Matched!",
+            "liveness": liveness,
+            "liveness_text": liveness_text,
+            "head_movement": head_movement
         }
 
     except Exception as e:
-        print("ERROR OCCURRED:")
         traceback.print_exc()
         return {"error": str(e)}
-
 def get_face_embedding(face):
     face = cv2.resize(face, (100, 100))
     face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
