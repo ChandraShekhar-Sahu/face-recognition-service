@@ -89,7 +89,7 @@ def get_head_pose(face_landmarks, img_w, img_h):
 
 # ---------------------- 3. ENDPOINTS (MATCHING DJANGO EXACTLY) ---------------------- #
 
-@app.post("/upload_photo")
+@app.post("/api/upload_photo")
 async def upload_photo(image: UploadFile = File(...)):
     """Mimics the Django upload_photo logic"""
     try:
@@ -101,7 +101,7 @@ async def upload_photo(image: UploadFile = File(...)):
         return JSONResponse({"error": str(e)}, status_code=400)
 
 
-@app.post("/verify_face")
+@app.post("/api/verify_face")
 async def verify_face(image: UploadFile = File(...)):
     """Mimics the Django verify_face logic and returns the exact same JSON"""
     try:
