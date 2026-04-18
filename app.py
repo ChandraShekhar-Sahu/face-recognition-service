@@ -100,26 +100,31 @@ async def upload_photo(image: UploadFile = File(...)):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
-
 @app.post("/api/verify_face")
-async def verify_face(image: UploadFile = File(...)):
-    """Mimics the Django verify_face logic and returns the exact same JSON"""
+async def verify_face(
+    reference: UploadFile = File(...), # The file Django sends from its local folder
+    image: UploadFile = File(...)      # The webcam image Django forwards from frontend
+):
+    """
+    Updated to receive both images from Django gateway.
+    Returns the exact same JSON structure as the original logic.
+    """
     try:
-        # 1. Read the uploaded webcam image
-        contents = await image.read()
-        np_arr = np.frombuffer(contents, np.uint8)
-        cur_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        # 1. Read and decode BOTH images from the request
+        ref_bytes = await reference.read()
+        cur_bytes = await image.read()
 
-        if cur_img is None:
-            return JSONResponse({"error": "Invalid image file"}, status_code=400)
+        ref_arr = np.frombuffer(ref_bytes, np.uint8)
+        cur_arr = np.frombuffer(cur_bytes, np.uint8)
 
-        # 2. Check if reference image exists
-        if not os.path.exists(REFERENCE_IMAGE_PATH):
-            return JSONResponse({"error": "No face found in reference image"}, status_code=400)
-        
-        ref_img = cv2.imread(REFERENCE_IMAGE_PATH)
+        ref_img = cv2.imdecode(ref_arr, cv2.IMREAD_COLOR)
+        cur_img = cv2.imdecode(cur_arr, cv2.IMREAD_COLOR)
 
-        # 3. Detect faces using SFace
+        if ref_img is None or cur_img is None:
+            return JSONResponse({"error": "Image decode failed. Ensure both files are valid images."}, status_code=400)
+
+        # 2. Detect faces using SFace
+        # We no longer use REFERENCE_IMAGE_PATH because Django provides the file directly
         detector.setInputSize((ref_img.shape[1], ref_img.shape[0]))
         _, ref_faces = detector.detect(ref_img)
         
@@ -130,10 +135,10 @@ async def verify_face(image: UploadFile = File(...)):
             return JSONResponse({
                 "match": False,
                 "face_detected": False, 
-                "message": "No face detected in uploaded image"
+                "message": "No face detected in one or both images"
             })
 
-        # 4. Compare Faces (SFace logic)
+        # 3. Compare Faces (SFace logic)
         ref_aligned = recognizer.alignCrop(ref_img, ref_faces[0])
         cur_aligned = recognizer.alignCrop(cur_img, cur_faces[0])
         ref_feature = recognizer.feature(ref_aligned)
@@ -143,7 +148,7 @@ async def verify_face(image: UploadFile = File(...)):
         match = bool(score >= 0.363)
         message = "Face Matched!" if match else "Face Not Matched!"
 
-        # 5. Liveness and Head Movement (MediaPipe)
+        # 4. Liveness and Head Movement (MediaPipe) - Performed on the webcam image (cur_img)
         img_h, img_w, _ = cur_img.shape
         rgb_frame = cv2.cvtColor(cur_img, cv2.COLOR_BGR2RGB)
         results = face_mesh.process(rgb_frame)
@@ -192,7 +197,7 @@ async def verify_face(image: UploadFile = File(...)):
         is_live = current_time - liveness_state["last_blink_time"] <= BLINK_INTERVAL
         liveness_text = "Blink Detected - Real Person" if is_live else "No Recent Blink - Potential Video"
 
-        # 6. EXACT DJANGO JSON RESPONSE
+        # 5. RETURN THE EXACT ORIGINAL JSON STRUCTURE
         return JSONResponse({
             "match": match,
             "face_detected": True,
