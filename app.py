@@ -1,6 +1,8 @@
 from fastapi import FastAPI, File, UploadFile
 import numpy as np
 import cv2
+import traceback
+
 
 app = FastAPI()
 
@@ -16,40 +18,39 @@ async def verify_face(
     current: UploadFile = File(...)
 ):
     try:
-        # Read files
         ref_bytes = await reference.read()
         cur_bytes = await current.read()
 
-        if not ref_bytes or not cur_bytes:
-            return {"match": False, "error": "Empty file"}
+        print("REF SIZE:", len(ref_bytes))
+        print("CUR SIZE:", len(cur_bytes))
 
-        # Convert to numpy
         ref_arr = np.frombuffer(ref_bytes, np.uint8)
         cur_arr = np.frombuffer(cur_bytes, np.uint8)
 
-        # Decode images
         ref_img = cv2.imdecode(ref_arr, cv2.IMREAD_COLOR)
         cur_img = cv2.imdecode(cur_arr, cv2.IMREAD_COLOR)
 
-        if ref_img is None or cur_img is None:
-            return {"match": False, "error": "Invalid image decoding"}
+        print("REF IMG:", type(ref_img))
+        print("CUR IMG:", type(cur_img))
 
-        # Resize (IMPORTANT — prevents crashes)
+        if ref_img is None or cur_img is None:
+            return {"error": "Image decode failed"}
+
         ref_img = cv2.resize(ref_img, (300, 300))
         cur_img = cv2.resize(cur_img, (300, 300))
 
-        # Dummy comparison (for now)
         diff = np.mean(cv2.absdiff(ref_img, cur_img))
 
         return {
             "match": diff < 50,
-            "difference": float(diff),
-            "message": "Working"
+            "difference": float(diff)
         }
 
     except Exception as e:
+        print("ERROR OCCURRED:")
+        traceback.print_exc()
+
         return {
-            "match": False,
             "error": str(e)
         }
 
