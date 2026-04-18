@@ -21,39 +21,54 @@ async def verify_face(
         ref_bytes = await reference.read()
         cur_bytes = await current.read()
 
-        print("REF SIZE:", len(ref_bytes))
-        print("CUR SIZE:", len(cur_bytes))
-
         ref_arr = np.frombuffer(ref_bytes, np.uint8)
         cur_arr = np.frombuffer(cur_bytes, np.uint8)
 
         ref_img = cv2.imdecode(ref_arr, cv2.IMREAD_COLOR)
         cur_img = cv2.imdecode(cur_arr, cv2.IMREAD_COLOR)
 
-        print("REF IMG:", type(ref_img))
-        print("CUR IMG:", type(cur_img))
-
         if ref_img is None or cur_img is None:
             return {"error": "Image decode failed"}
 
-        ref_img = cv2.resize(ref_img, (300, 300))
-        cur_img = cv2.resize(cur_img, (300, 300))
+        # 🔥 Convert to grayscale
+        ref_gray = cv2.cvtColor(ref_img, cv2.COLOR_BGR2GRAY)
+        cur_gray = cv2.cvtColor(cur_img, cv2.COLOR_BGR2GRAY)
 
-        diff = np.mean(cv2.absdiff(ref_img, cur_img))
+        # 🔥 Detect faces
+        ref_faces = face_cascade.detectMultiScale(ref_gray, 1.1, 3)
+        cur_faces = face_cascade.detectMultiScale(cur_gray, 1.1, 3)
+
+        if len(ref_faces) == 0 or len(cur_faces) == 0:
+            return {
+                "match": False,
+                "error": "Face not detected in one of the images"
+            }
+
+        # 🔥 Crop first face
+        (x, y, w, h) = ref_faces[0]
+        ref_face = ref_gray[y:y+h, x:x+w]
+
+        (x, y, w, h) = cur_faces[0]
+        cur_face = cur_gray[y:y+h, x:x+w]
+
+        # 🔥 Resize faces
+        ref_face = cv2.resize(ref_face, (100, 100))
+        cur_face = cv2.resize(cur_face, (100, 100))
+
+        # 🔥 Compare
+        diff = np.mean(cv2.absdiff(ref_face, cur_face))
 
         return {
-            "match": diff < 50,
-            "difference": float(diff)
+            "match": diff < 40,
+            "difference": float(diff),
+            "message": "Face compared"
         }
 
     except Exception as e:
-        print("ERROR OCCURRED:")
         traceback.print_exc()
-
-        return {
-            "error": str(e)
-        }
-
+        return {"error": str(e)}
+    
+    
 def get_face_embedding(face):
     face = cv2.resize(face, (100, 100))
     face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
